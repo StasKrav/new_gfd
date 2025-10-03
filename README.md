@@ -1,2 +1,1 @@
-# susanin
 # new_gfd
