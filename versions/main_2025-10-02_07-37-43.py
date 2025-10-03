@@ -35,27 +35,17 @@ class FileManager:
         curses.curs_set(0)  # Скрываем курсор
         curses.start_color()
         curses.use_default_colors()
-        
-        # Кастомные цвета
-        curses.init_color(10, 500, 500, 1000)  # пастельно-синий
-        curses.init_color(11, 500, 500, 500)  # розовый оттенок
-        curses.init_color(12, 550, 500, 300)  # лаймовый зелёный
-        curses.init_color(13, 1000, 800, 200)  # жёлто-оранжевый
-        curses.init_color(14, 300, 300, 300)   # мягкий серый
-        curses.init_color(15, 950, 900, 700)    # курсор
-        
-        # Пары цветов
-        curses.init_pair(1, 15, -1)    # курсор
-        curses.init_pair(2, 11, -1)  # директории — розовый оттенок
-        curses.init_pair(3, 12, -1)  # исполняемые — лаймовый
-        curses.init_pair(4, 10, curses.COLOR_BLACK)  # ссылки — пастельный синий
-        curses.init_pair(5, curses.COLOR_YELLOW, -1) # выделенные
+        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_RED)   # курсор
+        curses.init_pair(2, curses.COLOR_RED, -1)                   # директории
+        curses.init_pair(3, curses.COLOR_GREEN, -1)                 # исполняемые
+        curses.init_pair(4, curses.COLOR_CYAN, curses.COLOR_BLACK)  # символические ссылки
+        curses.init_pair(5, curses.COLOR_YELLOW, -1)  # выделенные файлы
+
+        # Для пометок операций
         curses.init_pair(6, curses.COLOR_GREEN, -1)  # copy
-        curses.init_pair(7, 13, -1)   # move — жёлто-оранжевый
+        curses.init_pair(7, curses.COLOR_YELLOW, -1) # move
         curses.init_pair(8, curses.COLOR_RED, -1)    # delete
-        curses.init_pair(9, 14, -1)   # сообщения — мягкий серый
-        
-        
+
         # Буфер (clipboard) для copy/move старой функциональности
         self.clipboard = []  # список полных путей
         self.clipboard_action = None
@@ -64,38 +54,6 @@ class FileManager:
         self.action_map = {}  # filename -> action
 
         self.get_files()
-        def move_cursor(self, delta):
-            """
-            Сдвигает курсор на delta и корректирует offset чтобы курсор был в видимой области.
-            Устойчив к отсутствию некоторых полей (cursor_pos, offset, max_items, files).
-            """
-            # Защита от пустого списка
-            files = getattr(self, "files", None)
-            if not files:
-                self.cursor_pos = 0
-                self.offset = 0
-                return
-        
-            # Инициализация полей, если вдруг их нет
-            if not hasattr(self, "cursor_pos"):
-                self.cursor_pos = 0
-            if not hasattr(self, "offset"):
-                self.offset = 0
-            if not hasattr(self, "max_items") or not self.max_items:
-                # Попробуем вычислить max_items от высоты окна, если у тебя есть self.height
-                self.max_items = max(1, getattr(self, "height", 20) - 4)
-        
-            # Новая позиция в пределах списка
-            new_pos = self.cursor_pos + int(delta)
-            new_pos = max(0, min(len(self.files) - 1, new_pos))
-            self.cursor_pos = new_pos
-        
-            # Корректируем offset чтобы курсор был видим
-            if self.cursor_pos < self.offset:
-                self.offset = self.cursor_pos
-            elif self.cursor_pos >= self.offset + self.max_items:
-                self.offset = self.cursor_pos - self.max_items + 1
-        
 
     def get_files(self):
         self.files = []
@@ -120,7 +78,7 @@ class FileManager:
             clipboard_info = f" | Clipboard: {len(self.clipboard)} item(s) [{self.clipboard_action}]"
         header = f" GFD - {self.current_dir} {clipboard_info} "
         try:
-            self.stdscr.addstr(0, 0, header[:self.width-1], curses.A_NORMAL)
+            self.stdscr.addstr(0, 0, header[:self.width-1], curses.A_REVERSE)
         except curses.error:
             pass
 
@@ -194,54 +152,37 @@ class FileManager:
         except curses.error:
             pass  # если не удалось нарисовать — игнорируем
 
-    def show_help_popup(
-                self,
-                help_text="←: Вернуться | →: Войти\Запустить \n c: Отметить для копирования \n m: Отметить для перемещения \n d: Отметить для удаления \n p: Применить метки \n x: Очистить буфер \n .: Показать\Скрыть скрытые файлы \n Space: Выбрать файл \n r: Переименовать \n n: Новый файл\папка \n ?: Помощь \n q: Выход ",
-                width_ratio=0.6,
-                height_ratio=0.4,
-                padding=4
-            ):
-                # Разбираем текст на строки, учитывая переносы \n
-                lines = []
-                for part in help_text.split("\n"):
-                    wrapped = textwrap.wrap(part, max(10, int(self.width * width_ratio) - 2 * padding))
-                    if not wrapped:
-                        lines.append("")
-                    else:
-                        lines.extend(wrapped)
-            
-                # Размер окна с учётом рамки и отступов
-                win_h = len(lines) + 2 * padding
-                win_w = min(self.width - 4, max(len(ln) for ln in lines) + 2 * padding)
-            
-                # Позиция окна — центр экрана
-                start_y = max(0, (self.height - win_h) // 2)
-                start_x = max(0, (self.width - win_w) // 2)
-            
+    def show_help_popup(self):
+        # Всплывающее окно с жёсткой рамкой; открывается по клавише "?"
+        help_text = "←: Back | →: Open/Run | q: Quit | c: Mark copy | m: Mark move | d: Mark delete | p: Execute marks | x: Clear clipboard | .: Show hidden | Space: Select | r: Rename | n: New | ?: Help"
+        # Разбираем на строки по ширине окна (с отступом для рамки)
+        max_inner_w = max(10, min(self.width - 6, 50))
+        lines = textwrap.wrap(help_text, max_inner_w)
+        # Размер окна: рамка + отступы
+        win_h = len(lines) + 4
+        win_w = min(self.width - 4, max((len(ln) for ln in lines)) + 4)
+        start_y = max(0, (self.height - win_h) // 2)
+        start_x = max(0, (self.width - win_w) // 2)
+        try:
+            win = curses.newwin(win_h, win_w, start_y, start_x)
+            win.box()
+            for idx, ln in enumerate(lines):
                 try:
-                    win = curses.newwin(win_h, win_w, start_y, start_x)
-                    win.box()
-            
-                    # Отрисовка текста с отступами
-                    for idx, ln in enumerate(lines):
-                        try:
-                            win.addstr(padding - 1 + idx, padding, ln[:win_w - 2 * padding])
-                        except curses.error:
-                            pass
-            
-                    win.refresh()
-                    try:
-                        win.get_wch()
-                    except Exception:
-                        pass
-            
-                    # Возврат в основное окно
-                    del win
-                    self.stdscr.touchwin()
-                    self.stdscr.refresh()
-            
+                    win.addstr(1 + idx, 2, ln[:win_w-4])
                 except curses.error:
-                    self.show_message(help_text)
+                    pass
+            win.refresh()
+            try:
+                win.get_wch()
+            except Exception:
+                pass
+            # После закрытия — вернём управление основному окну
+            del win
+            self.stdscr.touchwin()
+            self.stdscr.refresh()
+        except curses.error:
+            # Если не удалось создать popup — просто показать сообщение обычным способом
+            self.show_message(help_text)
 
     def get_input(self, prompt, default='', none_on_cancel=False):
                             win = self.stdscr
@@ -754,4 +695,3 @@ def main(stdscr):
 
 if __name__ == "__main__":
     curses.wrapper(main)
-

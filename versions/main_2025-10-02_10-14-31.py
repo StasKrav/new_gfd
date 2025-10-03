@@ -42,7 +42,7 @@ class FileManager:
         curses.init_color(12, 550, 500, 300)  # лаймовый зелёный
         curses.init_color(13, 1000, 800, 200)  # жёлто-оранжевый
         curses.init_color(14, 300, 300, 300)   # мягкий серый
-        curses.init_color(15, 950, 900, 700)    # курсор
+        curses.init_color(15, 950, 900, 700)         # чёрный (для фона)
         
         # Пары цветов
         curses.init_pair(1, 15, -1)    # курсор
@@ -64,38 +64,6 @@ class FileManager:
         self.action_map = {}  # filename -> action
 
         self.get_files()
-        def move_cursor(self, delta):
-            """
-            Сдвигает курсор на delta и корректирует offset чтобы курсор был в видимой области.
-            Устойчив к отсутствию некоторых полей (cursor_pos, offset, max_items, files).
-            """
-            # Защита от пустого списка
-            files = getattr(self, "files", None)
-            if not files:
-                self.cursor_pos = 0
-                self.offset = 0
-                return
-        
-            # Инициализация полей, если вдруг их нет
-            if not hasattr(self, "cursor_pos"):
-                self.cursor_pos = 0
-            if not hasattr(self, "offset"):
-                self.offset = 0
-            if not hasattr(self, "max_items") or not self.max_items:
-                # Попробуем вычислить max_items от высоты окна, если у тебя есть self.height
-                self.max_items = max(1, getattr(self, "height", 20) - 4)
-        
-            # Новая позиция в пределах списка
-            new_pos = self.cursor_pos + int(delta)
-            new_pos = max(0, min(len(self.files) - 1, new_pos))
-            self.cursor_pos = new_pos
-        
-            # Корректируем offset чтобы курсор был видим
-            if self.cursor_pos < self.offset:
-                self.offset = self.cursor_pos
-            elif self.cursor_pos >= self.offset + self.max_items:
-                self.offset = self.cursor_pos - self.max_items + 1
-        
 
     def get_files(self):
         self.files = []
@@ -120,7 +88,7 @@ class FileManager:
             clipboard_info = f" | Clipboard: {len(self.clipboard)} item(s) [{self.clipboard_action}]"
         header = f" GFD - {self.current_dir} {clipboard_info} "
         try:
-            self.stdscr.addstr(0, 0, header[:self.width-1], curses.A_NORMAL)
+            self.stdscr.addstr(0, 0, header[:self.width-1], curses.A_REVERSE)
         except curses.error:
             pass
 
